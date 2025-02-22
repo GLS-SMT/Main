@@ -1,0 +1,103 @@
+from machine import Pin
+import time
+
+# --- Pin Constants (using GP numbering) ---
+PB1_PIN = 1       # Push button 1 (GP1)
+PB2_PIN = 2       # Push button 2 (GP2)
+PB3_PIN = 3       # Push button 3 (GP3)
+SW1_PIN = 5       # Mode switch 1 (GP5)
+SW2_PIN = 6       # Mode switch 2 (GP6)
+GP13_PIN = 13     # Controls the TC4420 (GP13)
+
+# LED pins (with a 330Ω resistor in series to the anode)
+LED_RED_PIN = 16   # Red LED channel (GP16)
+LED_GREEN_PIN = 17 # Green LED channel (GP17)
+
+# --- Initialize Inputs (using physical pull-ups) ---
+PB1 = Pin(PB1_PIN, Pin.IN)
+PB2 = Pin(PB2_PIN, Pin.IN)
+PB3 = Pin(PB3_PIN, Pin.IN)
+SW1 = Pin(SW1_PIN, Pin.IN)
+SW2 = Pin(SW2_PIN, Pin.IN)
+
+# --- Initialize Outputs ---
+# Use open-drain for GP13 with an internal pull-up so it defaults HIGH.
+gp13 = Pin(GP13_PIN, Pin.OPEN_DRAIN, Pin.PULL_UP)
+led_red = Pin(LED_RED_PIN, Pin.OUT)
+led_green = Pin(LED_GREEN_PIN, Pin.OUT)
+
+# Default state: GP13 should be HIGH.
+gp13.value(1)
+
+def wait_for_release(button):
+    """Wait until the specified button is released (goes high)."""
+    while button.value() == 0:
+        time.sleep(0.01)
+
+def update_led(normal_mode):
+    """Update LED color:
+       - normal_mode True: LED green.
+       - normal_mode False: LED red.
+    """
+    if normal_mode:
+        led_green.value(1)
+        led_red.value(0)
+    else:
+        led_green.value(0)
+        led_red.value(1)
+
+def normal_mode_operation():
+    """
+    In normal mode, when a push button is pressed, pull GP13 LOW for a fixed time:
+      - PB1: LOW for 1 second.
+      - PB2: LOW for 2 seconds.
+      - PB3: LOW for 3 seconds.
+    When no push button is pressed, GP13 remains HIGH.
+    """
+    if PB1.value() == 0:
+        wait_for_release(PB1)
+        gp13.value(0)
+        time.sleep(1)
+        gp13.value(1)
+    elif PB2.value() == 0:
+        wait_for_release(PB2)
+        gp13.value(0)
+        time.sleep(2)
+        gp13.value(1)
+    elif PB3.value() == 0:
+        wait_for_release(PB3)
+        gp13.value(0)
+        time.sleep(3)
+        gp13.value(1)
+    else:
+        gp13.value(1)
+
+def bypass_mode_operation():
+    """
+    In bypass mode, only PB2 controls GP13:
+      - While PB2 is pressed, GP13 is LOW.
+      - When PB2 is released, GP13 goes HIGH.
+    """
+    if PB2.value() == 0:
+        gp13.value(0)
+    else:
+        gp13.value(1)
+
+def main():
+    while True:
+        # Normal mode: both switches HIGH.
+        if SW1.value() == 1 and SW2.value() == 1:
+            update_led(normal_mode=True)   # LED green in normal mode
+            normal_mode_operation()
+        # Bypass mode: both switches LOW.
+        elif SW1.value() == 0 and SW2.value() == 0:
+            update_led(normal_mode=False)  # LED red in bypass mode
+            bypass_mode_operation()
+        else:
+            # For any ambiguous state, default to normal mode.
+            update_led(normal_mode=True)
+            normal_mode_operation()
+        time.sleep(0.01)
+
+if __name__ == "__main__":
+    main()
